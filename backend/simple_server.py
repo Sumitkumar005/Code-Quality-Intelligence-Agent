@@ -269,6 +269,6 @@ async def analyze_github_background(report_id: str, repo_url: str):
 if __name__ == "__main__":
     import uvicorn
     print("🚀 Starting CQIA Backend Server...")
-    print("📍 API will be available at: http://localhost:8004")
-    print("📖 API docs at: http://localhost:8004/docs")
+    print("📍 API will be available at: http://localhost:8000")
+    print("📖 API docs at: http://localhost:8000/docs")
     uvicorn.run(app, host="0.0.0.0", port=8004)

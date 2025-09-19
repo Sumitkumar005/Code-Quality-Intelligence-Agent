@@ -13,6 +13,7 @@ import {
   QuestionResponse,
   QualityTrendsResponse,
   ProjectComparisonRequest,
+  ApiException,
 } from '@/types/api'
 
 export class AnalysisService {

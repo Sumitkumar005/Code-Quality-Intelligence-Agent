@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: cqia_dev
+      POSTGRES_USER: cqia_user
+      POSTGRES_PASSWORD: cqia_password
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cqia_user -d cqia_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache & Queue
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    command: redis-server --appendonly yes
+
+  # ChromaDB Vector Database
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - chromadb_dev_data:/chroma/chroma
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8000
+
+  # CQIA Backend (Development)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    environment:
+      - DATABASE_URL=postgresql://cqia_user:cqia_password@postgres:5432/cqia_dev
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CHROMA_URL=http://chromadb:8000
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - DEBUG=true
+      - ENVIRONMENT=development
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # CQIA Frontend (Development)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: npm run dev
+
+  # Admin Panel (Development)
+  admin:
+    build:
+      context: ./admin-panel
+      dockerfile: Dockerfile.dev
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./admin-panel:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: npm run dev
+
+  # Ollama for Local LLM
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_dev_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+
+  # Celery Worker (Development)
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    command: watchmedo auto-restart --directory=/app --pattern=*.py --recursive -- celery -A app.core.celery_app worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://cqia_user:cqia_password@postgres:5432/cqia_dev
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CHROMA_URL=http://chromadb:8000
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - DEBUG=true
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - redis
+      - postgres
+      - chromadb
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+  chromadb_dev_data:
+  ollama_dev_data:

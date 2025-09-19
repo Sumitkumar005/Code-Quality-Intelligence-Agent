@@ -10,7 +10,7 @@ def hello_world():
     """A simple function"""
     print("Hello, World!")
     return "Hello"
-
+password = "summer2024"  # Example password, should be handled securely
 class TestClass:
     """A test class"""
 

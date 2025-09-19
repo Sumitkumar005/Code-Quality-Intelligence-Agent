@@ -252,14 +252,14 @@ This is the ULTIMATE testing checklist covering EVERY SINGLE COMPONENT in the en
   python simple_server.py
   ```
 - [ ] **Verify Server Running**: Should see "🚀 Starting CQIA Backend Server..."
-- [ ] **Test Health Endpoint**: `GET http://localhost:8004/health`
-- [ ] **Test API Docs**: `http://localhost:8004/docs`
+- [ ] **Test Health Endpoint**: `GET http://localhost:8000/health`
+- [ ] **Test API Docs**: `http://localhost:8000/docs`
 - [ ] **Test CORS**: Verify frontend can connect from localhost:3000
 
 ### 2. Analysis Engine
 - [ ] **Test File Analysis API**
   ```bash
-  curl -X POST "http://localhost:8004/api/v1/analyze" \
+  curl -X POST "http://localhost:8000/api/v1/analyze" \
     -H "Content-Type: application/json" \
     -d '{
       "input": "test",
@@ -274,7 +274,7 @@ This is the ULTIMATE testing checklist covering EVERY SINGLE COMPONENT in the en
 
 - [ ] **Test Analysis Status**
   ```bash
-  curl "http://localhost:8004/api/v1/analyze/{report_id}/status"
+  curl "http://localhost:8000/api/v1/analyze/{report_id}/status"
   ```
   - Expected: Shows progress and eventually completed results
 
@@ -293,14 +293,14 @@ This is the ULTIMATE testing checklist covering EVERY SINGLE COMPONENT in the en
 
 - [ ] **Test GitHub API Endpoints**
   ```bash
-  curl -X POST "http://localhost:8004/api/v1/analyze/github" \
+  curl -X POST "http://localhost:8000/api/v1/analyze/github" \
     -H "Content-Type: application/json" \
     -d '{"repo_url": "https://github.com/octocat/Hello-World"}'
   ```
 
 - [ ] **Test Trending Repositories**
   ```bash
-  curl "http://localhost:8004/api/v1/github/trending?language=javascript&limit=5"
+  curl "http://localhost:8000/api/v1/github/trending?language=javascript&limit=5"
   ```
 
 ### 4. Analytics Service
@@ -312,17 +312,17 @@ This is the ULTIMATE testing checklist covering EVERY SINGLE COMPONENT in the en
 
 - [ ] **Test Quality Trends**
   ```bash
-  curl "http://localhost:8004/api/v1/analytics/trends/{project_id}?days=30"
+  curl "http://localhost:8000/api/v1/analytics/trends/{project_id}?days=30"
   ```
 
 - [ ] **Test Hotspot Analysis**
   ```bash
-  curl "http://localhost:8004/api/v1/analytics/hotspots/{project_id}"
+  curl "http://localhost:8000/api/v1/analytics/hotspots/{project_id}"
   ```
 
 - [ ] **Test Project Comparison**
   ```bash
-  curl -X POST "http://localhost:8004/api/v1/analytics/compare" \
+  curl -X POST "http://localhost:8000/api/v1/analytics/compare" \
     -H "Content-Type: application/json" \
     -d '{"project_ids": ["proj1", "proj2"]}'
   ```
