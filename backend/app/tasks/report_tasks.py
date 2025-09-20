@@ -252,7 +252,7 @@ def generate_performance_report(
 
             # Store the report file
             file_storage = FileStorageService()
-            await file_storage.write_file(project_id, file_path, file_content)
+            file_storage.write_file(project_id, file_path, file_content)
 
             # Update report record
             _update_report_status(
