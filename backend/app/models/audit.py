@@ -40,7 +40,7 @@ class AuditLog(CQIA_Base):
     session_id: Mapped[Optional[str]] = mapped_column(String(255))
 
     # Additional metadata
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    audit_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     # Status
     success: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

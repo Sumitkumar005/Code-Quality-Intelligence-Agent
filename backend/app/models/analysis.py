@@ -232,8 +232,8 @@ class AnalysisArtifact(CQIA_Base):
     # Content (for small artifacts)
     content: Mapped[Optional[str]] = mapped_column(Text)
 
-    # Metadata
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    # Metadata (renamed to avoid conflict)
+    artifact_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     # Relationships
     analysis: Mapped["Analysis"] = relationship("Analysis")

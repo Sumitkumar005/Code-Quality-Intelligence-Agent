@@ -7,7 +7,7 @@ from .database import get_db, create_tables
 from .security import create_access_token, verify_token, get_password_hash, verify_password
 from .cache import get_cache, set_cache, delete_cache
 from .celery_app import celery_app
-from .exceptions import CQIAException, ValidationException, NotFoundException
+from .exceptions import CQIAException, ValidationError, NotFoundError
 from .logging import get_logger
 
 __all__ = [
@@ -23,7 +23,7 @@ __all__ = [
     "delete_cache",
     "celery_app",
     "CQIAException",
-    "ValidationException",
-    "NotFoundException",
+    "ValidationError",
+    "NotFoundError",
     "get_logger"
 ]

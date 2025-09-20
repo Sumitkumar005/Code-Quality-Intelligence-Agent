@@ -108,7 +108,7 @@ class ConversationMessage(CQIA_Base):
 
     # Metadata
     token_count: Mapped[Optional[int]] = mapped_column(Integer)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    message_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     # Relationships
     conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages")

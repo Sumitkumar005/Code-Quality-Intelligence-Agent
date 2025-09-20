@@ -40,8 +40,8 @@ class Report(CQIA_Base):
     is_public: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    # Metadata
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    # Metadata (renamed to avoid conflict)
+    report_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     config: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     # Relationships
@@ -61,7 +61,6 @@ class Report(CQIA_Base):
             # Generate download URL based on file path
             return f"/api/v1/reports/{self.id}/download"
         return None
-
 
 class ReportTemplate(CQIA_Base):
     """Report template model for customizable report formats."""
