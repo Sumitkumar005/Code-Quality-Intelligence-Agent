@@ -2,6 +2,7 @@
 export interface ApiResponse<T> {
   success: boolean
   data: T
+  error?: ApiError
   meta?: {
     pagination?: PaginationMeta
     timestamp: string
@@ -38,6 +39,7 @@ export interface ApiConfig {
 
 // Request/Response Types
 export interface RequestOptions {
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   headers?: Record<string, string>
   params?: Record<string, any>
   timeout?: number
