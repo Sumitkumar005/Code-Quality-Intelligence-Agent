@@ -1,9 +1,8 @@
 """
-Notifications services package.
+Notification services package.
 """
 
-from .email_service import EmailService
-from .webhook_service import WebhookService
 from .notification_manager import NotificationManager
+from .email_service import EmailService
 
-__all__ = ["EmailService", "WebhookService", "NotificationManager"]
+__all__ = ["NotificationManager", "EmailService"]

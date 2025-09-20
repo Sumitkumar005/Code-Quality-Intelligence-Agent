@@ -1,5 +1,5 @@
 """
-Analysis services package.
+Code analysis services package.
 """
 
 from .orchestrator import AnalysisOrchestrator

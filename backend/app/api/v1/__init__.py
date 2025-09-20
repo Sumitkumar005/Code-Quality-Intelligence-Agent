@@ -1,5 +1,5 @@
 """
-API v1 package for the CQIA application.
+API v1 package.
 """
 
 from .router import api_router

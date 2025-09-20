@@ -1,316 +1,440 @@
 """
-Q&A endpoints for the CQIA application.
+Q&A API endpoints for code quality questions.
 """
 
-from typing import Any, List
-from uuid import UUID
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
-from app.models.user import User
-from app.schemas.conversation import (
-    AIQueryRequest,
-    AIQueryResponse,
-    AIInsightsRequest,
-    AIInsightsResponse,
-    CodeExplanationRequest,
-    CodeExplanationResponse,
-    AIFeedbackRequest,
-    AIFeedbackResponse,
-)
-from app.schemas.base import SuccessResponse
-from app.crud.conversation import conversation_crud, conversation_message_crud
+from app import crud, models, schemas
+from app.api import deps
+from app.core.logging import get_logger
+from app.services.ai import ai_service
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
-@router.post("/ask", response_model=SuccessResponse[AIQueryResponse])
-def ask_ai(
-    query_request: AIQueryRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@router.post("/ask", response_model=schemas.conversation.Conversation)
+def ask_question(
+    *,
+    db: Session = Depends(deps.get_db),
+    question_in: schemas.conversation.ConversationCreate,
+    background_tasks: BackgroundTasks,
+    current_user: models.User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Ask AI a question about code quality.
+    Ask a question about code quality.
     """
-    # This would integrate with AI service
-    # For now, return mock response
-    response = AIQueryResponse(
-        conversation_id=None,  # No conversation for direct Q&A
-        message_id=None,
-        response="Based on your question about code quality, here are some recommendations: 1) Ensure proper error handling, 2) Add comprehensive unit tests, 3) Follow consistent coding standards, 4) Implement proper logging.",
-        sources=[
-            {
-                "type": "documentation",
-                "title": "Code Quality Best Practices",
-                "url": "https://example.com/best-practices",
-                "relevance_score": 0.95
-            }
-        ],
-        confidence=0.88,
-        token_usage={"prompt": 45, "completion": 120, "total": 165}
-    )
+    try:
+        # Create conversation record
+        conversation = crud.conversation.create(
+            db=db, obj_in=question_in, user_id=current_user.id
+        )
 
-    return SuccessResponse(
-        data=response,
-        message="AI response generated successfully"
-    )
+        # Get AI response in background
+        background_tasks.add_task(
+            process_question,
+            db=db,
+            conversation_id=conversation.id,
+            question=question_in.message,
+            project_id=question_in.project_id,
+            user_id=current_user.id
+        )
+
+        return conversation
+
+    except Exception as e:
+        logger.error(f"Failed to process question: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process question",
+        )
 
 
-@router.post("/insights", response_model=SuccessResponse[AIInsightsResponse])
-def get_code_insights(
-    insights_request: AIInsightsRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@router.get("/conversations", response_model=schemas.conversation.ConversationListResponse)
+def list_conversations(
+    db: Session = Depends(deps.get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    project_id: Optional[str] = Query(None),
+    current_user: models.User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Get AI insights for code or project.
+    List Q&A conversations.
     """
-    # This would integrate with AI insights service
-    insights_response = AIInsightsResponse(
-        insights=[
-            {
-                "type": "security",
-                "title": "Potential Security Vulnerability",
-                "description": "Detected use of insecure random number generation",
-                "priority": "high",
-                "confidence": 0.92
-            },
-            {
-                "type": "performance",
-                "title": "Performance Optimization Opportunity",
-                "description": "Consider using more efficient data structures",
-                "priority": "medium",
-                "confidence": 0.78
-            }
-        ],
-        recommendations=[
-            "Replace random with secrets for cryptographic operations",
-            "Use list comprehensions instead of traditional loops where appropriate",
-            "Consider implementing caching for frequently accessed data",
-            "Add type hints for better code maintainability"
-        ],
-        trends=[
-            {
-                "metric": "code_complexity",
-                "trend": "stable",
-                "change_percentage": -2.5,
-                "period": "last_30_days"
-            }
-        ],
-        priorities=[
-            {
-                "item": "Security fixes",
-                "priority": "critical",
-                "description": "Address 2 high-priority security issues immediately"
-            },
-            {
-                "item": "Performance improvements",
-                "priority": "high",
-                "description": "Optimize database queries and caching"
-            }
-        ]
+    conversations = crud.conversation.get_multi(
+        db=db,
+        user_id=current_user.id,
+        project_id=project_id,
+        skip=skip,
+        limit=limit
     )
 
-    return SuccessResponse(
-        data=insights_response,
-        message="AI insights generated successfully"
+    total = len(conversations)  # In production, use a count query
+
+    return schemas.conversation.ConversationListResponse(
+        conversations=conversations,
+        total=total,
+        page=skip // limit + 1,
+        size=limit
     )
 
 
-@router.post("/explain", response_model=SuccessResponse[CodeExplanationResponse])
-def explain_code(
-    explanation_request: CodeExplanationRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@router.get("/conversations/{conversation_id}", response_model=schemas.conversation.Conversation)
+def get_conversation(
+    *,
+    db: Session = Depends(deps.get_db),
+    conversation_id: str,
+    current_user: models.User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Get AI explanation for code snippet.
+    Get a specific conversation.
     """
-    # This would integrate with AI code explanation service
-    explanation_response = CodeExplanationResponse(
-        explanation="This code implements a function that validates user input and processes it according to business rules. The function includes proper error handling and logging mechanisms.",
-        complexity="medium",
-        suggestions=[
-            "Consider extracting validation logic into separate functions for better testability",
-            "Add more specific error messages to help with debugging",
-            "The function could benefit from early returns to reduce nesting",
-            "Consider adding input sanitization for security"
-        ],
-        related_issues=[
-            {
-                "id": "issue-123",
-                "title": "Input validation incomplete",
-                "severity": "medium",
-                "description": "Some input parameters lack proper validation"
-            },
-            {
-                "id": "issue-124",
-                "title": "Error handling could be improved",
-                "severity": "low",
-                "description": "Consider more specific exception types"
-            }
-        ]
+    conversation = crud.conversation.get(db=db, id=conversation_id)
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found",
+        )
+
+    # Check if user owns this conversation
+    if conversation.user_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
+
+    return conversation
+
+
+@router.post("/conversations/{conversation_id}/messages", response_model=schemas.conversation.ConversationMessage)
+def add_message_to_conversation(
+    *,
+    db: Session = Depends(deps.get_db),
+    conversation_id: str,
+    message_in: schemas.conversation.ConversationMessageCreate,
+    background_tasks: BackgroundTasks,
+    current_user: models.User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Add a message to a conversation.
+    """
+    conversation = crud.conversation.get(db=db, id=conversation_id)
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found",
+        )
+
+    # Check if user owns this conversation
+    if conversation.user_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
+
+    # Add message
+    message = crud.conversation.create_message(
+        db=db, obj_in=message_in, conversation_id=conversation_id
     )
 
-    return SuccessResponse(
-        data=explanation_response,
-        message="Code explanation generated successfully"
+    # Get AI response if this is a user message
+    if message_in.role == "user":
+        background_tasks.add_task(
+            process_followup_question,
+            db=db,
+            conversation_id=conversation_id,
+            message_id=message.id,
+            question=message_in.content,
+            project_id=conversation.project_id,
+            user_id=current_user.id
+        )
+
+    return message
+
+
+@router.get("/conversations/{conversation_id}/messages", response_model=List[schemas.conversation.ConversationMessage])
+def get_conversation_messages(
+    *,
+    db: Session = Depends(deps.get_db),
+    conversation_id: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=200),
+    current_user: models.User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Get messages for a conversation.
+    """
+    conversation = crud.conversation.get(db=db, id=conversation_id)
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found",
+        )
+
+    # Check if user owns this conversation
+    if conversation.user_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
+
+    messages = crud.conversation.get_messages(
+        db=db, conversation_id=conversation_id, skip=skip, limit=limit
     )
 
+    return messages
 
-@router.post("/feedback", response_model=SuccessResponse[AIFeedbackResponse])
+
+@router.delete("/conversations/{conversation_id}")
+def delete_conversation(
+    *,
+    db: Session = Depends(deps.get_db),
+    conversation_id: str,
+    current_user: models.User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Delete a conversation.
+    """
+    conversation = crud.conversation.get(db=db, id=conversation_id)
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found",
+        )
+
+    # Check if user owns this conversation
+    if conversation.user_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
+
+    crud.conversation.remove(db=db, id=conversation_id)
+    return {"message": "Conversation deleted successfully"}
+
+
+@router.post("/feedback", response_model=schemas.conversation.ConversationFeedback)
 def submit_feedback(
-    feedback_request: AIFeedbackRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    *,
+    db: Session = Depends(deps.get_db),
+    feedback_in: schemas.conversation.ConversationFeedbackCreate,
+    current_user: models.User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Submit feedback on AI responses.
+    Submit feedback on a conversation or message.
     """
-    # This would store feedback for AI model improvement
-    feedback_response = AIFeedbackResponse(
-        feedback_id="feedback-12345",
-        status="recorded",
-        message="Thank you for your feedback. This will help improve our AI responses."
+    feedback = crud.conversation.create_feedback(
+        db=db, obj_in=feedback_in, user_id=current_user.id
     )
-
-    return SuccessResponse(
-        data=feedback_response,
-        message="Feedback submitted successfully"
-    )
+    return feedback
 
 
-@router.get("/suggestions", response_model=SuccessResponse[dict])
-def get_ai_suggestions(
-    context: str = None,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@router.get("/search", response_model=schemas.conversation.ConversationSearchResponse)
+def search_conversations(
+    *,
+    db: Session = Depends(deps.get_db),
+    query: str = Query(..., min_length=1),
+    project_id: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=50),
+    current_user: models.User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Get AI-powered suggestions based on context.
+    Search through conversations.
     """
-    # This would provide context-aware suggestions
-    suggestions = {
-        "quick_actions": [
-            "Run code analysis on current project",
-            "Generate quality report",
-            "Check for security vulnerabilities",
-            "Review recent commits"
-        ],
-        "improvement_suggestions": [
-            "Consider implementing automated testing",
-            "Add code documentation",
-            "Set up CI/CD pipeline",
-            "Implement code review process"
-        ],
-        "learning_resources": [
+    conversations = crud.conversation.search(
+        db=db,
+        user_id=current_user.id,
+        query=query,
+        project_id=project_id,
+        skip=skip,
+        limit=limit
+    )
+
+    total = len(conversations)  # In production, use a count query
+
+    return schemas.conversation.ConversationSearchResponse(
+        conversations=conversations,
+        total=total,
+        query=query,
+        page=skip // limit + 1,
+        size=limit
+    )
+
+
+@router.get("/suggestions", response_model=List[str])
+def get_suggestions(
+    *,
+    db: Session = Depends(deps.get_db),
+    project_id: Optional[str] = Query(None),
+    limit: int = Query(10, ge=1, le=20),
+    current_user: models.User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Get suggested questions based on project context.
+    """
+    try:
+        suggestions = ai_service.get_suggestions(
+            user_id=current_user.id,
+            project_id=project_id,
+            limit=limit
+        )
+        return suggestions
+    except Exception as e:
+        logger.error(f"Failed to get suggestions: {e}")
+        return []
+
+
+@router.post("/analyze-code")
+def analyze_code_snippet(
+    *,
+    db: Session = Depends(deps.get_db),
+    analysis_in: schemas.conversation.CodeAnalysisCreate,
+    current_user: models.User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Analyze a code snippet for quality issues.
+    """
+    try:
+        # This would integrate with the analysis services
+        # For now, return a mock response
+        result = {
+            "analysis_id": "mock-analysis-id",
+            "status": "completed",
+            "issues": [],
+            "suggestions": [
+                "Consider adding error handling",
+                "This function could be optimized",
+                "Add documentation for better maintainability"
+            ],
+            "score": 85.0
+        }
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Failed to analyze code: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to analyze code",
+        )
+
+
+@router.get("/trending-topics", response_model=List[schemas.conversation.TrendingTopic])
+def get_trending_topics(
+    *,
+    db: Session = Depends(deps.get_db),
+    project_id: Optional[str] = Query(None),
+    limit: int = Query(10, ge=1, le=20),
+    current_user: models.User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Get trending topics/questions.
+    """
+    try:
+        # Mock trending topics
+        topics = [
             {
-                "title": "Clean Code Principles",
-                "type": "article",
-                "url": "https://example.com/clean-code"
+                "topic": "Error handling best practices",
+                "count": 25,
+                "trend": "up"
             },
             {
-                "title": "Test-Driven Development",
-                "type": "course",
-                "url": "https://example.com/tdd-course"
-            }
-        ]
-    }
-
-    return SuccessResponse(
-        data=suggestions,
-        message="AI suggestions retrieved successfully"
-    )
-
-
-@router.post("/analyze-patterns", response_model=SuccessResponse[dict])
-def analyze_code_patterns(
-    code_snippet: str,
-    language: str = "python",
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-) -> Any:
-    """
-    Analyze code patterns and provide feedback.
-    """
-    # This would analyze code patterns using AI
-    analysis_result = {
-        "patterns_detected": [
-            {
-                "pattern": "Factory Pattern",
-                "confidence": 0.85,
-                "description": "Code follows factory pattern for object creation"
+                "topic": "Code optimization techniques",
+                "count": 18,
+                "trend": "stable"
             },
             {
-                "pattern": "Observer Pattern",
-                "confidence": 0.72,
-                "description": "Event handling suggests observer pattern usage"
+                "topic": "Security vulnerabilities",
+                "count": 15,
+                "trend": "up"
             }
-        ],
-        "anti_patterns": [
-            {
-                "pattern": "God Object",
-                "severity": "medium",
-                "description": "Some classes have too many responsibilities"
-            }
-        ],
-        "best_practices": [
-            "Good separation of concerns",
-            "Consistent naming conventions",
-            "Proper error handling"
-        ],
-        "improvement_areas": [
-            "Consider breaking down large classes",
-            "Add more comprehensive documentation",
-            "Implement interface segregation"
         ]
-    }
 
-    return SuccessResponse(
-        data=analysis_result,
-        message="Code pattern analysis completed successfully"
-    )
+        return topics[:limit]
+
+    except Exception as e:
+        logger.error(f"Failed to get trending topics: {e}")
+        return []
 
 
-@router.get("/help", response_model=SuccessResponse[dict])
-def get_ai_help_topics(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-) -> Any:
+async def process_question(
+    db: Session,
+    conversation_id: str,
+    question: str,
+    project_id: Optional[str] = None,
+    user_id: str = None
+) -> None:
     """
-    Get available AI help topics.
+    Process a question and generate AI response.
     """
-    help_topics = {
-        "code_quality": [
-            "Code review guidelines",
-            "Best practices",
-            "Common anti-patterns",
-            "Refactoring techniques"
-        ],
-        "testing": [
-            "Unit testing strategies",
-            "Integration testing",
-            "Test coverage analysis",
-            "Mocking techniques"
-        ],
-        "security": [
-            "Common vulnerabilities",
-            "Secure coding practices",
-            "Authentication & authorization",
-            "Data protection"
-        ],
-        "performance": [
-            "Performance optimization",
-            "Memory management",
-            "Database optimization",
-            "Caching strategies"
-        ]
-    }
+    try:
+        # Get AI response
+        response = await ai_service.process_question(
+            question=question,
+            project_id=project_id,
+            user_id=user_id
+        )
 
-    return SuccessResponse(
-        data=help_topics,
-        message="AI help topics retrieved successfully"
-    )
+        # Update conversation with AI response
+        crud.conversation.update_response(
+            db=db,
+            conversation_id=conversation_id,
+            response=response
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to process question {conversation_id}: {e}")
+        # Update conversation with error
+        crud.conversation.update_response(
+            db=db,
+            conversation_id=conversation_id,
+            response="I apologize, but I encountered an error while processing your question. Please try again."
+        )
+
+
+async def process_followup_question(
+    db: Session,
+    conversation_id: str,
+    message_id: str,
+    question: str,
+    project_id: Optional[str] = None,
+    user_id: str = None
+) -> None:
+    """
+    Process a follow-up question and generate AI response.
+    """
+    try:
+        # Get AI response
+        response = await ai_service.process_question(
+            question=question,
+            project_id=project_id,
+            user_id=user_id,
+            conversation_id=conversation_id
+        )
+
+        # Add AI response as a message
+        message_in = schemas.conversation.ConversationMessageCreate(
+            role="assistant",
+            content=response,
+            metadata={"type": "ai_response"}
+        )
+
+        crud.conversation.create_message(
+            db=db, obj_in=message_in, conversation_id=conversation_id
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to process follow-up question {message_id}: {e}")
+        # Add error message
+        error_message = schemas.conversation.ConversationMessageCreate(
+            role="assistant",
+            content="I apologize, but I encountered an error while processing your question. Please try again.",
+            metadata={"type": "error", "error": str(e)}
+        )
+
+        crud.conversation.create_message(
+            db=db, obj_in=error_message, conversation_id=conversation_id
+        )

@@ -1,19 +1,7 @@
 """
-Services package for the CQIA application.
+Services package.
 """
 
-from . import (
-    analysis_service,
-    report_service,
-    ai_service,
-    webhook_service,
-    audit_service,
-)
+from .base import BaseService
 
-__all__ = [
-    "analysis_service",
-    "report_service",
-    "ai_service",
-    "webhook_service",
-    "audit_service",
-]
+__all__ = ["BaseService"]
