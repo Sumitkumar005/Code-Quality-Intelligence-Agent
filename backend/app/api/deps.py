@@ -8,10 +8,10 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 
-from app.core.config import settings
-from app.core.database import get_db
-from app.core.security import verify_token
-from app.models.user import User
+from core.config import settings
+from core.database import get_db
+from core.security import verify_token
+from models.user import User
 
 # OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
@@ -137,4 +137,10 @@ def check_admin_access(current_user: User = Depends(get_current_superuser)) -> U
 
 
 def get_current_active_superuser(current_user: User = Depends(get_current_active_user)) -> User:
-    " \Get current active superuser.\\n
+    """Get current active superuser."""
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    return current_user

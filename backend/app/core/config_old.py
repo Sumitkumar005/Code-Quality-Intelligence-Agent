@@ -35,20 +35,6 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3001",
     ]
 
-    # CORS Settings (additional)
-    BACKEND_CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",  # Frontend
-        "http://localhost:3001",  # Admin panel
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-    ]
-
-    # Additional CORS origins (for backward compatibility)
-    ALLOWED_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000"
-    ]
-
     # Database
     DATABASE_URL: str
     DATABASE_POOL_SIZE: int = 20
@@ -72,7 +58,6 @@ class Settings(BaseSettings):
 
     # AI Configuration
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "llama2"
     OPENAI_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
     DEFAULT_LLM_MODEL: str = "llama2"
@@ -92,10 +77,6 @@ class Settings(BaseSettings):
     MINIO_ENDPOINT: Optional[str] = None
     MINIO_ACCESS_KEY: Optional[str] = None
     MINIO_SECRET_KEY: Optional[str] = None
-
-    # File Upload Settings
-    MAX_FILE_SIZE: int = 10485760  # 10MB
-    UPLOAD_DIR: str = "./uploads"
 
     # Email Configuration
     SMTP_TLS: bool = True

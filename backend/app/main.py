@@ -13,10 +13,10 @@ import structlog
 import uvicorn
 from contextlib import asynccontextmanager
 
-from app.api.v1 import analyze, report, qa, pr
-from app.core.config import get_settings
-from app.utils.logger import setup_logging
-from app.db.sqlite_session import init_db
+from api.v1 import analyze, report, qa, pr
+from core.config import get_settings
+from utils.logger import setup_logging
+from db.sqlite_session import init_db
 
 # Setup structured logging
 setup_logging()
@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     
     # Check Ollama availability
     try:
-        from app.core.llm_client import check_ollama_health
+        from core.llm_client import check_ollama_health
         await check_ollama_health()
         logger.info("Ollama connection verified")
     except Exception as e:
