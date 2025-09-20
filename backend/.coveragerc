@@ -1,0 +1,82 @@
+[run]
+source = app
+omit =
+    */tests/*
+    */test_*
+    app/main.py
+    app/cli.py
+    app/db/migrations/*
+    app/db/migrations/versions/*
+    app/core/__init__.py
+    app/api/__init__.py
+    app/api/v1/__init__.py
+    app/models/__init__.py
+    app/services/__init__.py
+    app/services/*/__init__.py
+    app/utils/__init__.py
+    app/tasks/__init__.py
+    app/db/__init__.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if self.debug:
+    if settings.DEBUG
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if __name__ == .__main__.:
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+    def __str__
+    def __eq__
+    def __hash__
+    def __init__
+    def __del__
+    def __enter__
+    def __exit__
+    def __call__
+    def __getattr__
+    def __setattr__
+    def __delattr__
+    def __len__
+    def __getitem__
+    def __setitem__
+    def __delitem__
+    def __iter__
+    def __next__
+    def __reversed__
+    def __contains__
+    def __add__
+    def __sub__
+    def __mul__
+    def __floordiv__
+    def __truediv__
+    def __mod__
+    def __pow__
+    def __lshift__
+    def __rshift__
+    def __and__
+    def __xor__
+    def __or__
+    def __neg__
+    def __pos__
+    def __abs__
+    def __invert__
+    def __complex__
+    def __int__
+    def __float__
+    def __round__
+    def __ceil__
+    def __floor__
+    def __trunc__
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml
+
+[json]
+output = coverage.json

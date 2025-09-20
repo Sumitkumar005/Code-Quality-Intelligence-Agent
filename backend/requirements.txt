@@ -1,39 +1,93 @@
-# Core FastAPI dependencies
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
-pydantic>=2.5.0
-pydantic-settings>=2.1.0
+# Core FastAPI and web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+gunicorn==21.2.0
 
-# Database
-sqlalchemy>=2.0.0
+# Database and ORM
+sqlalchemy==2.0.23
+alembic==1.12.1
+psycopg2-binary==2.9.9
 
-# HTTP and networking
-httpx>=0.25.0
-requests>=2.31.0
+# Authentication and Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
 
-# Security and middleware
-slowapi>=0.1.9
-python-multipart>=0.0.6
+# Background tasks and async
+celery==5.3.4
+redis==5.0.1
+
+# HTTP client and requests
+httpx==0.25.2
+aiohttp==3.9.1
+
+# Data validation and serialization
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# File handling and storage
+python-multipart==0.0.6
+aiofiles==23.2.1
+
+# Environment and configuration
+python-dotenv==1.0.0
 
 # Logging and monitoring
-structlog>=23.2.0
+structlog==23.2.0
 
-# AI and ML dependencies
-langchain>=0.1.0
-langchain-community>=0.0.10
-ollama>=0.1.7
-sentence-transformers>=2.2.2
-chromadb>=0.4.18
-huggingface-hub>=0.19.0
+# Code analysis and parsing
+tree-sitter==0.20.4
+tree-sitter-python==0.20.3
+tree-sitter-javascript==0.20.3
+tree-sitter-typescript==0.20.3
+tree-sitter-java==0.20.2
+tree-sitter-go==0.20.1
+tree-sitter-rust==0.20.1
+tree-sitter-c-sharp==0.20.1
+tree-sitter-php==0.20.1
 
-# Code analysis
-ast-tools>=0.1.0
+# AI and Machine Learning
+langchain==0.1.0
+langchain-community==0.0.10
+langchain-openai==0.0.2
+langchain-anthropic==0.0.2
+chromadb==0.4.18
+sentence-transformers==2.2.2
+torch==2.1.1
+transformers==4.35.2
+tokenizers==0.15.0
 
-# CLI dependencies
-click>=8.1.0
-rich>=13.7.0
-pathlib2>=2.3.7
+# Git and version control
+GitPython==3.1.40
+pygithub==2.1.1
+python-gitlab==4.2.0
+
+# Report generation
+reportlab==4.0.7
+weasyprint==60.2
+jinja2==3.1.2
+
+# Email and notifications
+smtplib3==1.0.0
+
+# Testing and development
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+pytest-cov==4.1.0
+
+# Code quality and linting
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
+mypy==1.7.1
+
+# Documentation
+mkdocs==1.5.3
+mkdocs-material==9.4.8
 
 # Utilities
-python-dotenv>=1.0.0
-typing-extensions>=4.8.0
+click==8.1.7
+rich==13.7.0
+typer==0.9.0
+pathlib2==2.3.7-snapshot

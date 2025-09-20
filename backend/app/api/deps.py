@@ -134,3 +134,7 @@ def check_organization_access(
 def check_admin_access(current_user: User = Depends(get_current_superuser)) -> User:
     """Check if user has admin access."""
     return current_user
+
+
+def get_current_active_superuser(current_user: User = Depends(get_current_active_user)) -> User:
+    " \Get current active superuser.\\n

@@ -1,150 +1,107 @@
 """
-Main FastAPI application for the CQIA (Code Quality Intelligence Agent) system.
+CQIA-Tool: Code Quality Intelligence Agent
+FastAPI main application entry point
 """
 
-import logging
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator
-
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import structlog
+import uvicorn
+from contextlib import asynccontextmanager
 
-from app.api.v1.router import api_router
-from app.core.config import settings
-from app.core.database import create_tables
-from app.core.exceptions import APIException
-from app.core.logging import setup_logging
+from app.api.v1 import analyze, report, qa, pr
+from app.core.config import get_settings
+from app.utils.logger import setup_logging
+from app.db.sqlite_session import init_db
 
-# Setup logging
+# Setup structured logging
 setup_logging()
+logger = structlog.get_logger(__name__)
 
-logger = logging.getLogger(__name__)
-
+# Rate limiting
+limiter = Limiter(key_func=get_remote_address)
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """
-    Lifespan context manager for FastAPI application.
-    Handles startup and shutdown events.
-    """
-    logger.info("Starting CQIA application...")
-
-    # Startup tasks
+async def lifespan(app: FastAPI):
+    """Application lifespan events"""
+    logger.info("Starting CQIA-Tool backend...")
+    
+    # Initialize database
+    await init_db()
+    
+    # Check Ollama availability
     try:
-        # Create database tables
-        create_tables()
-        logger.info("Database tables created/verified")
-
-        # Initialize cache, background tasks, etc.
-        logger.info("Application startup completed")
-
+        from app.core.llm_client import check_ollama_health
+        await check_ollama_health()
+        logger.info("Ollama connection verified")
     except Exception as e:
-        logger.error(f"Error during startup: {e}")
-        raise
-
+        logger.warning(f"Ollama not available: {e}")
+    
     yield
+    
+    logger.info("Shutting down CQIA-Tool backend...")
 
-    # Shutdown tasks
-    logger.info("Shutting down CQIA application...")
-    # Cleanup resources, close connections, etc.
-    logger.info("Application shutdown completed")
-
-
-def create_application() -> FastAPI:
-    """
-    Create and configure the FastAPI application.
-    """
+def create_app() -> FastAPI:
+    """Create and configure FastAPI application"""
+    settings = get_settings()
+    
     app = FastAPI(
-        title=settings.PROJECT_NAME,
-        description="Code Quality Intelligence Agent - Advanced code analysis and quality management platform",
-        version=settings.VERSION,
-        openapi_url=f"{settings.API_V1_STR}/openapi.json",
-        docs_url="/docs",
-        redoc_url="/redoc",
-        lifespan=lifespan,
+        title="CQIA-Tool API",
+        description="Code Quality Intelligence Agent - Analyze, Report, and Improve Code Quality",
+        version="1.0.0",
+        docs_url="/docs" if settings.DEBUG else None,
+        redoc_url="/redoc" if settings.DEBUG else None,
+        lifespan=lifespan
     )
-
-    # Set up CORS
-    if settings.BACKEND_CORS_ORIGINS:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
-
-    # Add trusted host middleware
-    if not settings.DEBUG:
-        app.add_middleware(
-            TrustedHostMiddleware,
-            allowed_hosts=settings.ALLOWED_HOSTS,
-        )
-
-    # Include API routers
-    app.include_router(api_router, prefix=settings.API_V1_STR)
-
-    # Global exception handlers
-    @app.exception_handler(APIException)
-    async def api_exception_handler(request: Request, exc: APIException):
-        """Handle custom API exceptions."""
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "success": False,
-                "message": exc.detail,
-                "error_code": exc.error_code,
-                "data": exc.data
-            },
-        )
-
-    @app.exception_handler(Exception)
-    async def global_exception_handler(request: Request, exc: Exception):
-        """Handle unexpected exceptions."""
-        logger.error(f"Unexpected error: {exc}", exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={
-                "success": False,
-                "message": "Internal server error",
-                "error_code": "INTERNAL_ERROR"
-            },
-        )
-
-    # Root endpoint
-    @app.get("/", tags=["root"])
-    async def root():
-        """Root endpoint with API information."""
-        return {
-            "message": "Welcome to CQIA - Code Quality Intelligence Agent",
-            "version": settings.VERSION,
-            "docs": "/docs",
-            "health": "/api/v1/health",
-            "status": "running"
-        }
-
-    # Health check endpoint (simple)
-    @app.get("/health", tags=["health"])
+    
+    # Middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.ALLOWED_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=settings.ALLOWED_HOSTS
+    )
+    
+    # Rate limiting
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    
+    # API Routes
+    app.include_router(analyze.router, prefix="/api/v1", tags=["analysis"])
+    app.include_router(report.router, prefix="/api/v1", tags=["reports"])
+    app.include_router(qa.router, prefix="/api/v1", tags=["qa"])
+    app.include_router(pr.router, prefix="/api/v1", tags=["pr-review"])
+    
+    @app.get("/health")
     async def health_check():
-        """Simple health check endpoint."""
-        return {"status": "healthy", "version": settings.VERSION}
-
+        """Health check endpoint"""
+        return {"status": "healthy", "version": "1.0.0"}
+    
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request, exc):
+        logger.error(f"Global exception: {exc}", exc_info=True)
+        return HTTPException(status_code=500, detail="Internal server error")
+    
     return app
 
-
-# Create the FastAPI application instance
-app = create_application()
-
+app = create_app()
 
 if __name__ == "__main__":
-    import uvicorn
-
+    settings = get_settings()
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
+        host=settings.HOST,
+        port=settings.PORT,
         reload=settings.DEBUG,
-        log_level="info",
+        log_config=None  # Use structlog instead
     )

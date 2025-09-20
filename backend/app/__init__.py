@@ -3,6 +3,10 @@ CQIA Backend Application Package.
 """
 
 from .main import app
+
+from .config import get_settings
+from .cli import CQIAClient
+
 from .core import (
     settings,
     get_db,
