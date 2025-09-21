@@ -2,6 +2,7 @@
 Analysis endpoints for the CQIA application.
 """
 
+import logging
 from typing import Any, List
 from uuid import UUID
 
@@ -25,6 +26,9 @@ from app.schemas.analysis import (
 from app.schemas.base import SuccessResponse, PaginatedResponse
 from app.crud.analysis import analysis_crud, issue_crud
 from app.crud.project import project_crud
+from app.tasks.analysis_tasks import run_full_analysis, run_security_scan, run_performance_analysis, run_dependency_analysis
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -95,8 +99,76 @@ def create_analysis(
 
     analysis = analysis_crud.create(db, obj_in=analysis_create)
 
-    # Trigger background analysis task
-    background_tasks.add_task(run_analysis_task, analysis.id, analysis_in.config)
+    # Trigger background analysis task based on analysis type
+    try:
+        analysis_type = analysis_in.analysis_type.lower()
+
+        if analysis_type == "full" or analysis_type == "comprehensive":
+            # Get project files for analysis
+            project = db.query(Project).filter(Project.id == analysis_in.project_id).first()
+            if not project:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Project not found"
+                )
+
+            # Get file paths from project (this would need to be implemented based on your project structure)
+            file_paths = analysis_in.config.get("file_paths", [])
+
+            # Trigger full analysis task
+            run_full_analysis.delay(
+                str(analysis.id),
+                str(analysis_in.project_id),
+                file_paths,
+                analysis_in.config
+            )
+
+        elif analysis_type == "security":
+            # Trigger security scan task
+            file_paths = analysis_in.config.get("file_paths", [])
+            run_security_scan.delay(
+                str(analysis.id),
+                str(analysis_in.project_id),
+                file_paths,
+                analysis_in.config
+            )
+
+        elif analysis_type == "performance":
+            # Trigger performance analysis task
+            file_paths = analysis_in.config.get("file_paths", [])
+            run_performance_analysis.delay(
+                str(analysis.id),
+                str(analysis_in.project_id),
+                file_paths,
+                analysis_in.config
+            )
+
+        elif analysis_type == "dependency":
+            # Trigger dependency analysis task
+            file_paths = analysis_in.config.get("file_paths", [])
+            run_dependency_analysis.delay(
+                str(analysis.id),
+                str(analysis_in.project_id),
+                file_paths,
+                analysis_in.config
+            )
+
+        else:
+            # Default to full analysis for unknown types
+            file_paths = analysis_in.config.get("file_paths", [])
+            run_full_analysis.delay(
+                str(analysis.id),
+                str(analysis_in.project_id),
+                file_paths,
+                analysis_in.config
+            )
+
+        logger.info(f"Triggered {analysis_type} analysis task for analysis {analysis.id}")
+
+    except Exception as e:
+        logger.error(f"Failed to trigger analysis task: {e}")
+        # Update analysis status to failed
+        analysis_crud.update_status(db, analysis.id, "failed")
 
     return SuccessResponse(
         data=analysis,
@@ -295,13 +367,3 @@ def delete_analysis(
         data={},
         message="Analysis deleted successfully"
     )
-
-
-# Background task function
-def run_analysis_task(analysis_id: UUID, config: dict):
-    """
-    Background task to run analysis.
-    """
-    # This would integrate with the actual analysis service
-    # For now, just a placeholder
-    pass
