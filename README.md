@@ -11,7 +11,7 @@ An advanced code quality analysis tool that combines AST parsing, machine learni
 - **AST-Based Analysis**: Deep structural code analysis using Abstract Syntax Trees
 - **AI-Powered Insights**: LangChain-based agent with conversational Q&A
 - **RAG Integration**: Retrieval-Augmented Generation for large codebases
-- **CLI Interface**: Simple command-line tool for quick analysis
+- **CLI Interface**: Simple command-line tool for quick analysis.
 - **Web Interface**: Modern React-based dashboard
 
 ### Analysis Categories
